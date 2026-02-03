@@ -65,7 +65,8 @@ input{
 <header>🪙 STC Rewards</header>
 
 <div class="card" id="loginBox">
-  <button class="btn" id="loginBtn">🔐 Login with Google</button>
+  <button class="btn" id="googleBtn">🔐 Login / Sign-Up with Google</button>
+  <div class="notice">Use Google account to login or create a new account automatically.</div>
 </div>
 
 <div id="app" style="display:none">
@@ -101,7 +102,7 @@ input{
 <!-- ✅ FIREBASE MODULAR SDK -->
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js";
-import { getAuth, GoogleAuthProvider, signInWithRedirect, signInWithPopup, getRedirectResult, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js";
+import { getAuth, GoogleAuthProvider, signInWithPopup, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js";
 import { getFirestore, doc, getDoc, setDoc, updateDoc, addDoc, collection, increment, query, where, getDocs } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
 
 // Firebase config
@@ -134,30 +135,18 @@ const withdrawStatus = document.getElementById("withdrawStatus");
 let userRef;
 let userData = { coins:0, stc:0, referralUsed:false };
 
-// 🔐 LOGIN (popup for desktop, redirect for mobile)
-loginBtn.onclick = async () => {
+// 🔐 LOGIN / SIGN-UP
+googleBtn.onclick = async () => {
   try {
-    if(window.innerWidth < 768){
-      await signInWithRedirect(auth, provider);
-    } else {
-      const result = await signInWithPopup(auth, provider);
-      handleUser(result.user);
-    }
+    const result = await signInWithPopup(auth, provider);
+    const user = result.user;
+    await handleUser(user);
   } catch(err){
     alert(err.message);
   }
 };
 
-// Handle redirect login
-getRedirectResult(auth)
-  .then(result => {
-    if(result?.user){
-      handleUser(result.user);
-    }
-  })
-  .catch(err => console.error(err));
-
-// ✅ Handle login or first-time sign-up
+// Handle user: login or first-time sign-up
 async function handleUser(user){
   userRef = doc(db,"users",user.uid);
   const snap = await getDoc(userRef);
@@ -193,9 +182,11 @@ async function handleUser(user){
   updateUI();
 }
 
-// Auth state observer (persistent login)
+// Persist login
 onAuthStateChanged(auth,user=>{
-  if(user) handleUser(user);
+  if(user){
+    handleUser(user);
+  }
 });
 
 // 🎥 WATCH AD
