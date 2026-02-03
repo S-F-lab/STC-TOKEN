@@ -101,7 +101,7 @@ input{
 <!-- ✅ FIREBASE MODULAR SDK -->
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js";
-import { getAuth, GoogleAuthProvider, signInWithRedirect, getRedirectResult, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js";
+import { getAuth, GoogleAuthProvider, signInWithRedirect, signInWithPopup, getRedirectResult, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js";
 import { getFirestore, doc, getDoc, setDoc, updateDoc, addDoc, collection, increment, query, where, getDocs } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
 
 // Firebase config
@@ -134,9 +134,20 @@ const withdrawStatus = document.getElementById("withdrawStatus");
 let userRef;
 let userData = { coins:0, stc:0, referralUsed:false };
 
-// 🔐 LOGIN
-document.getElementById("loginBtn").onclick = () => {
-  signInWithRedirect(auth, provider);
+// 🔐 LOGIN (popup fallback)
+loginBtn.onclick = async () => {
+  try {
+    if(window.innerWidth < 768){
+      // Mobile → redirect
+      await signInWithRedirect(auth, provider);
+    } else {
+      // Desktop → popup
+      const result = await signInWithPopup(auth, provider);
+      console.log("Login success", result.user.email);
+    }
+  } catch(err){
+    alert(err.message);
+  }
 };
 
 // Handle redirect result
