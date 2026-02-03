@@ -102,8 +102,9 @@ input{
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js";
 import { getAuth, GoogleAuthProvider, signInWithRedirect, getRedirectResult, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js";
-import { getFirestore, doc, getDoc, setDoc, updateDoc, addDoc, collection, increment } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
+import { getFirestore, doc, getDoc, setDoc, updateDoc, addDoc, collection, increment, query, where, getDocs } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
 
+// Firebase config
 const firebaseConfig = {
   apiKey: "AIzaSyBuln_Ersxi0jbc7erfLTs0TsCdrUBJmjs",
   authDomain: "stc-rewards.firebaseapp.com",
@@ -114,28 +115,45 @@ const firebaseConfig = {
   measurementId: "G-P35QKVN3B0"
 };
 
+// Initialize Firebase
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
 const db = getFirestore(app);
 const provider = new GoogleAuthProvider();
 
+// DOM elements
+const loginBox = document.getElementById("loginBox");
+const appDiv = document.getElementById("app");
+const userEmail = document.getElementById("userEmail");
+const coins = document.getElementById("coins");
+const stc = document.getElementById("stc");
+const refCode = document.getElementById("refCode");
+const withdrawAmount = document.getElementById("withdrawAmount");
+const withdrawStatus = document.getElementById("withdrawStatus");
+
 let userRef;
-let userData = { coins:0, stc:0 };
+let userData = { coins:0, stc:0, referralUsed:false };
 
 // 🔐 LOGIN
 document.getElementById("loginBtn").onclick = () => {
   signInWithRedirect(auth, provider);
 };
 
-// Handle redirect
-getRedirectResult(auth).catch(err => alert(err.message));
+// Handle redirect result
+getRedirectResult(auth)
+  .then(result => {
+    if(result?.user){
+      console.log("Redirect login success", result.user.email);
+    }
+  })
+  .catch(err => console.error(err));
 
 // Auth state
 onAuthStateChanged(auth, async user => {
   if(!user) return;
 
   loginBox.style.display = "none";
-  app.style.display = "block";
+  appDiv.style.display = "block";
   userEmail.innerText = user.email;
 
   userRef = doc(db, "users", user.uid);
@@ -150,6 +168,18 @@ onAuthStateChanged(auth, async user => {
       createdAt: Date.now()
     };
     await setDoc(userRef, userData);
+
+    // Apply referral if exists
+    const ref = new URLSearchParams(location.search).get("ref");
+    if(ref){
+      const q = query(collection(db,"users"), where("referralCode","==",ref));
+      const querySnap = await getDocs(q);
+      if(!querySnap.empty){
+        await updateDoc(querySnap.docs[0].ref, { stc: increment(5) });
+        await updateDoc(userRef, { referralUsed: true });
+      }
+    }
+
   } else {
     userData = snap.data();
   }
@@ -195,7 +225,7 @@ window.withdraw = async () => {
   updateUI();
 };
 
-// UI
+// UI update
 function updateUI(){
   coins.innerText = userData.coins;
   stc.innerText = userData.stc;
