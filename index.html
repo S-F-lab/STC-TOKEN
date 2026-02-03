@@ -134,43 +134,36 @@ const withdrawStatus = document.getElementById("withdrawStatus");
 let userRef;
 let userData = { coins:0, stc:0, referralUsed:false };
 
-// 🔐 LOGIN (popup fallback)
+// 🔐 LOGIN (popup for desktop, redirect for mobile)
 loginBtn.onclick = async () => {
   try {
     if(window.innerWidth < 768){
-      // Mobile → redirect
       await signInWithRedirect(auth, provider);
     } else {
-      // Desktop → popup
       const result = await signInWithPopup(auth, provider);
-      console.log("Login success", result.user.email);
+      handleUser(result.user);
     }
   } catch(err){
     alert(err.message);
   }
 };
 
-// Handle redirect result
+// Handle redirect login
 getRedirectResult(auth)
   .then(result => {
     if(result?.user){
-      console.log("Redirect login success", result.user.email);
+      handleUser(result.user);
     }
   })
   .catch(err => console.error(err));
 
-// Auth state
-onAuthStateChanged(auth, async user => {
-  if(!user) return;
-
-  loginBox.style.display = "none";
-  appDiv.style.display = "block";
-  userEmail.innerText = user.email;
-
-  userRef = doc(db, "users", user.uid);
+// ✅ Handle login or first-time sign-up
+async function handleUser(user){
+  userRef = doc(db,"users",user.uid);
   const snap = await getDoc(userRef);
 
   if(!snap.exists()){
+    // First-time sign-up
     userData = {
       coins:0,
       stc:0,
@@ -178,7 +171,7 @@ onAuthStateChanged(auth, async user => {
       referralUsed:false,
       createdAt: Date.now()
     };
-    await setDoc(userRef, userData);
+    await setDoc(userRef,userData);
 
     // Apply referral if exists
     const ref = new URLSearchParams(location.search).get("ref");
@@ -190,12 +183,19 @@ onAuthStateChanged(auth, async user => {
         await updateDoc(userRef, { referralUsed: true });
       }
     }
-
   } else {
     userData = snap.data();
   }
 
+  loginBox.style.display = "none";
+  appDiv.style.display = "block";
+  userEmail.innerText = user.email;
   updateUI();
+}
+
+// Auth state observer (persistent login)
+onAuthStateChanged(auth,user=>{
+  if(user) handleUser(user);
 });
 
 // 🎥 WATCH AD
