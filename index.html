@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<title>STC Rewards</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+<!-- Premium UI -->
+<style>
+*{box-sizing:border-box;font-family:Inter,system-ui}
+body{
+  margin:0;
+  background:linear-gradient(135deg,#020617,#0f172a);
+  color:#fff;
+}
+header{
+  padding:20px;
+  text-align:center;
+  font-size:22px;
+  font-weight:700;
+}
+.card{
+  background:#020617;
+  border-radius:16px;
+  padding:16px;
+  margin:16px;
+  box-shadow:0 10px 40px rgba(0,0,0,.5);
+  animation:fadeUp .6s ease;
+}
+@keyframes fadeUp{
+  from{opacity:0;transform:translateY(20px)}
+  to{opacity:1;transform:translateY(0)}
+}
+.btn{
+  width:100%;
+  padding:14px;
+  border:none;
+  border-radius:12px;
+  background:#22c55e;
+  color:#000;
+  font-size:16px;
+  font-weight:700;
+  cursor:pointer;
+}
+.btn:disabled{opacity:.4}
+.small{font-size:13px;opacity:.8}
+.badge{
+  background:#1e293b;
+  padding:6px 10px;
+  border-radius:999px;
+  font-size:12px;
+}
+.notice{
+  background:#92400e;
+  padding:10px;
+  border-radius:10px;
+  font-size:13px;
+  margin-top:10px;
+}
+input{
+  width:100%;
+  padding:12px;
+  border-radius:10px;
+  border:none;
+  margin-top:8px;
+}
+hr{border:0;border-top:1px solid #1e293b;margin:16px 0}
+</style>
+</head>
+
+<body>
+
+<header>🪙 STC Rewards</header>
+
+<div class="card" id="loginBox">
+  <button class="btn" onclick="login()">🔐 Login with Google</button>
+</div>
+
+<div id="app" style="display:none">
+
+  <div class="card">
+    <div>👤 <span id="userEmail"></span></div>
+    <div class="small">Referral Code: <b id="refCode"></b></div>
+    <div class="small">STC Withdraw 🔒 Locked until 10M users</div>
+  </div>
+
+  <div class="card">
+    <div>💰 Coins: <b id="coins">0</b></div>
+    <div>🪙 STC: <b id="stc">0</b></div>
+    <span class="badge">1000 Coins = 100 PKR</span>
+  </div>
+
+  <div class="card">
+    <button class="btn" onclick="watchAd()">🎥 Watch Ad</button>
+    <div class="small">Earn coins + random STC</div>
+  </div>
+
+  <div class="card">
+    <h3>💸 Withdraw</h3>
+    <input id="withdrawAmount" placeholder="Coins amount (min 2000)" />
+    <button class="btn" onclick="withdraw()">Submit Request</button>
+    <div class="notice">
+      📅 Withdraw requests can be sent anytime.<br>
+      ⏳ All reviews & payments happen after the <b>21st</b> of every month.
+    </div>
+    <div id="withdrawStatus" class="small"></div>
+  </div>
+
+</div>
+
+<!-- Firebase -->
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+
+<script>
+// 🔥 CONFIG (REPLACE WITH YOURS)
+firebase.initializeApp({
+  apiKey: "YOUR_API_KEY",
+  authDomain: "YOUR_PROJECT.firebaseapp.com",
+  projectId: "YOUR_PROJECT"
+});
+
+const auth = firebase.auth();
+const db = firebase.firestore();
+
+let userRef, userData = {coins:0, stc:0};
+
+// 🔐 LOGIN
+function login(){
+  auth.signInWithPopup(new firebase.auth.GoogleAuthProvider());
+}
+
+auth.onAuthStateChanged(async user=>{
+  if(!user) return;
+
+  document.getElementById("loginBox").style.display="none";
+  document.getElementById("app").style.display="block";
+  document.getElementById("userEmail").innerText=user.email;
+
+  userRef = db.collection("users").doc(user.uid);
+  const snap = await userRef.get();
+
+  if(!snap.exists){
+    userData = {
+      coins:0,
+      stc:0,
+      referralUsed:false,
+      referralCode:user.uid.slice(0,6).toUpperCase(),
+      createdAt:Date.now()
+    };
+    await userRef.set(userData);
+    applyReferral();
+  }else{
+    userData = snap.data();
+  }
+
+  updateUI();
+});
+
+// 👥 REFERRAL
+async function applyReferral(){
+  const ref = new URLSearchParams(location.search).get("ref");
+  if(!ref || userData.referralUsed) return;
+
+  const q = await db.collection("users")
+    .where("referralCode","==",ref).get();
+
+  if(q.empty) return;
+
+  await q.docs[0].ref.update({stc:firebase.firestore.FieldValue.increment(5)});
+  await userRef.update({referralUsed:true});
+}
+
+// 🎥 WATCH AD (SIMULATED)
+function watchAd(){
+  const now = Date.now();
+  if(localStorage.lastAd && now - localStorage.lastAd < 30000){
+    alert("⏳ Please wait before watching next ad");
+    return;
+  }
+
+  localStorage.lastAd = now;
+
+  const earned = Math.floor(Math.random()*20)+10;
+  const randomSTC = Math.random() < 0.2 ? 1 : 0;
+
+  userData.coins += earned;
+  userData.stc += randomSTC;
+
+  userRef.update({
+    coins:userData.coins,
+    stc:userData.stc
+  });
+
+  updateUI();
+}
+
+// 💸 WITHDRAW
+function withdraw(){
+  const amount = Number(withdrawAmount.value);
+  if(amount < 2000 || amount > userData.coins){
+    withdrawStatus.innerText="❌ Invalid amount";
+    return;
+  }
+
+  userData.coins -= amount;
+  userRef.update({coins:userData.coins});
+
+  db.collection("withdraw_requests").add({
+    uid:auth.currentUser.uid,
+    amount,
+    status:"pending",
+    time:Date.now()
+  });
+
+  const day = new Date().getDate();
+  withdrawStatus.innerText =
+    day < 21
+    ? "✅ Submitted. Review after 21st."
+    : "✅ Submitted. Under monthly review.";
+
+  updateUI();
+}
+
+// 🔄 UI
+function updateUI(){
+  coins.innerText=userData.coins;
+  stc.innerText=userData.stc;
+  refCode.innerText=userData.referralCode;
+}
+</script>
+
+</body>
+</html>
